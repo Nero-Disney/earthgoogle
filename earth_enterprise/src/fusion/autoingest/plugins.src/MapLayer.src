@@ -33,7 +33,7 @@ std::vector<std::string> MapLayerAssetVersionImpl::GetPOIFiles(void) const {
   std::vector<std::string> results;
   if (children.size() > 2) {
     int closureCount = 0;
-    auto theClosure = [&results, &closureCount](const std::string& v)
+    auto collectPOIOutputFiles = [&results, &closureCount](const std::string& v)
     {
       if (closureCount++ > 2) {
         AssetVersion child(v);
@@ -42,7 +42,7 @@ std::vector<std::string> MapLayerAssetVersionImpl::GetPOIFiles(void) const {
         }
       }
     };
-    children.doForEach(theClosure);
+    children.doForEach(collectPOIOutputFiles);
   }
   return results;
 }
@@ -75,7 +75,7 @@ void
 MapLayerAssetImplD::HandleEditRequest(const MapLayerEditRequest &req)
 {
   // Validate our inputs (Make sure they are all VectorProducts)
-  std::vector<std::string> productrefs;
+  std::vector<SharedString> productrefs;
   productrefs.reserve(req.config.subLayers.size());
   for (uint s = 0; s < req.config.subLayers.size(); ++s) {
     VectorProductFactory::ValidateRefForInput
@@ -142,7 +142,7 @@ MapLayerAssetVersionImplD::UpdateChildren(void)
   AssetVersion source = guard->inputvers[0];
 
   std::vector<AssetVersion> queries;
-  std::vector<std::string> queryRefs;
+  std::vector<SharedString> queryRefs;
   queries.push_back(source);
   queryRefs.push_back(source->GetRef());
 
@@ -167,7 +167,7 @@ MapLayerAssetVersionImplD::UpdateChildren(void)
     MutableAssetVersionD query_version =
       VectorQueryFactory::FindMakeAndUpdateSubAsset
       (assetRef, queryname,
-       makevec1(guard->inputvers[sl]->GetRef()),
+       makevec1<SharedString>(guard->inputvers[sl]->GetRef()),
        khMetaData(),
        queryconfig,
        makevec1(guard->inputvers[sl]));

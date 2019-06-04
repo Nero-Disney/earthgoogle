@@ -31,6 +31,14 @@ AssetVersionRef::AssetVersionRef(const std::string &ref)
   }
 }
 
+AssetVersionRef::AssetVersionRef(const SharedString &ref) : AssetVersionRef(ref.toString())
+{
+}
+
+AssetVersionRef::AssetVersionRef(const SharedString &ref, uint vernum) : AssetVersionRef(ref.toString(), vernum)
+{
+}
+
 AssetVersionRef::operator std::string() const
 {
   if (version == "current") {

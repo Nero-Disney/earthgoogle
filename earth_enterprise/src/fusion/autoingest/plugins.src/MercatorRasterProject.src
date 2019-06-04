@@ -364,7 +364,7 @@ void MercatorRasterProjectAssetImplD::HandleEditRequest(
                                                kMercatorProjectSubtype));
 
   // Will be filled in later.
-  std::vector<std::string> inputs;
+  std::vector<SharedString> inputs;
 
   // Custom FindMake - modified to set/preserve indexVersion & fuid_channel_.
   MutableMercatorRasterProjectAssetD project =
@@ -434,7 +434,7 @@ void MercatorRasterProjectAssetImplD::HandleNewRequest(
     RasterProjectConfig projConfig(req.type);
     MutableMercatorRasterProjectAssetD project =
       MercatorRasterProjectFactory::Make(projname,
-                                 std::vector<std::string>(),
+                                 std::vector<SharedString>(),
                                  khMetaData(),
                                  projConfig);
 
@@ -560,7 +560,7 @@ void MercatorRasterProjectAssetVersionImplD::UpdateChildren(void) {
 
   if (numInsets == 0) {
     throw khException(kh::tr("No insets defined for project %1.\n"
-                             "Cannot build").arg(GetRef()));
+                             "Cannot build").arg(GetRef().toString()));
   }
 }
 
@@ -636,19 +636,19 @@ void MercatorRasterProjectAssetVersionImplD::DelayedBuildChildren(void) {
   const uint numInsets = inputs.size();
   if (numInsets == 0) {
     throw khException(kh::tr("No insets defined for project %1.\n"
-                             "Cannot build").arg(GetRef()));
+                             "Cannot build").arg(GetRef().toString()));
   }
 
   // sanity check in case the previous logic to ensure a valid channel id
   // fails
   if (config.fuid_channel_ == 0) {
     throw khException(kh::tr("Internal Error: No channel id for %1")
-                      .arg(GetRef()));
+                      .arg(GetRef().toString()));
   }
 
   if (config.asset_uuid_ == "") {
     throw khException(kh::tr("Internal Error: No UUID for %1")
-                      .arg(GetRef()));
+                      .arg(GetRef().toString()));
   }
 
 
@@ -687,7 +687,7 @@ void MercatorRasterProjectAssetVersionImplD::DelayedBuildChildren(void) {
       notify(NFY_DEBUG,
              "  Historical Inset: %d %s, level %d, start date: %s\n",
              i,
-             inset_infos[i].resource_->GetRef().c_str(),
+             inset_infos[i].resource_->GetRef().toString().c_str(),
              inset_infos[i].effectiveMaxLevel,
              inset_infos[i].date_string_.c_str());
     }
@@ -716,7 +716,7 @@ void MercatorRasterProjectAssetVersionImplD::DelayedBuildChildren(void) {
   MutableAssetVersionD dbroot =
     RasterDBRootFactory::FindMakeAndUpdateSubAsset(
         assetRef, type, "dbroot",
-        std::vector<std::string>(),
+        std::vector<SharedString>(),
         khMetaData(),
         dbrootConfig,
         std::vector<AssetVersion>());
@@ -740,7 +740,7 @@ void MercatorRasterProjectAssetVersionImplD::DelayedBuildChildren(void) {
             config.legend));
     MutableAssetVersionD layerjs =
       MapLayerJSFactory::FindMakeAndUpdate(layerJSAssetName,
-                                           std::vector<std::string>(),
+                                           std::vector<SharedString>(),
                                            khMetaData(),
                                            layerJSConfig,
                                            std::vector<AssetVersion>());
@@ -818,7 +818,7 @@ uint32 MercatorRasterProjectAssetVersionImplD::BuildIndex(
   if (numInsets == 0) {
     throw khException(kh::tr("Attempt to build index with too few "
                              "insets for project: %1.\n"
-                             "Cannot build").arg(GetRef()));
+                             "Cannot build").arg(GetRef().toString()));
   }
 
   std::vector<InsetInfo<
@@ -927,7 +927,7 @@ uint32 MercatorRasterProjectAssetVersionImplD::BuildIndex(
   }
 
   // create my children giving them each a bigger piece of the stack
-  std::vector<std::string> packgenkids;
+  std::vector<SharedString> packgenkids;
   std::vector<std::string> packgenassets;
   std::vector<AssetVersion> packgenvers;
   packgenkids.reserve(numInsets);
@@ -1097,7 +1097,7 @@ uint32 MercatorRasterProjectAssetVersionImplD::BuildIndex(
 
       if (kFillingTerrainInset == genInfoIt->terrain_inset_type) {
         notify(NFY_DEBUG, "Skip \"Filling\"-terrain inset: %s",
-               genInfoIt->assetname.c_str());
+               genInfoIt->assetname.toString().c_str());
         continue;  // Skip "Filling" terrain inset.
       }
     }

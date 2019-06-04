@@ -44,19 +44,15 @@ AssetVersionImplD::StateChangeNotifier::GetNotifier(
 }
 
 void
-AssetVersionImplD::StateChangeNotifier::AddParentsToNotify(const std::vector<std::string> & parents) {
+AssetVersionImplD::StateChangeNotifier::AddParentsToNotify(const std::vector<SharedString> & parents) {
+   //std::copy(parents.begin(), parents.end(), std::inserter(parentsToNotify, parentsToNotify.end()));
   for (const auto& p : parents)
     parentsToNotify.insert(p);
-  if (!MiscConfig::Instance().ConsolidateListenerNotifications) {
-    // If the user has opted not to consolidate notifications, send
-    // notifications immediately
-    NotifyParents(nullptr);
-  }
 }
 
 void
-AssetVersionImplD::StateChangeNotifier::AddListenersToNotify(const std::vector<std::string> & listeners, AssetDefs::State inputState) {
-  for (const std::string & listener : listeners) {
+AssetVersionImplD::StateChangeNotifier::AddListenersToNotify(const std::vector<SharedString> & listeners, AssetDefs::State inputState) {
+  for (const auto & listener : listeners) {
     // This ensures that the listener is in the list of listeners to notify
     InputStates & elem = listenersToNotify[listener];
     if (inputState == AssetDefs::Succeeded) {
@@ -65,11 +61,6 @@ AssetVersionImplD::StateChangeNotifier::AddListenersToNotify(const std::vector<s
     else if (!AssetDefs::Working(inputState)) {
       elem.allWorkingOrSucceeded = false;
     }
-  }
-  if (!MiscConfig::Instance().ConsolidateListenerNotifications) {
-    // If the user has opted not to consolidate notifications, send
-    // notifications immediately
-    NotifyListeners(nullptr);
   }
 }
 
@@ -92,19 +83,18 @@ AssetVersionImplD::StateChangeNotifier::NotifyParents(
     std::shared_ptr<StateChangeNotifier> notifier) {
   notify(NFY_VERBOSE, "Iterate through parents");
   int i = 1;
-  std::vector<std::string> theRefs = parentsToNotify.keys();
-  for (const std::string & ref : theRefs) {
+  for (auto ref : parentsToNotify.keys()) {
     AssetVersionD assetVersion(ref);
     notify(NFY_PROGRESS, "Iteration: %d | Total Iterations: %s | parent: %s",
            i,
-           ToString(theRefs.size()).c_str(),
-           ref.c_str());
+           ToString(parentsToNotify.size()).c_str(),
+           ref.toString().c_str());
     if (assetVersion) {
       notify(NFY_VERBOSE, "Calling parent->HandleChildStateChange()");
       assetVersion->HandleChildStateChange(notifier);
     } else {
       notify(NFY_WARN, "'%s' has broken parent '%s'",
-             assetVersion->GetRef().c_str(), ref.c_str());
+             assetVersion->GetRef().toString().c_str(), ref.toString().c_str());
     }
     i++;
   }
@@ -116,14 +106,14 @@ AssetVersionImplD::StateChangeNotifier::NotifyListeners(
     std::shared_ptr<StateChangeNotifier> notifier) {
   notify(NFY_VERBOSE, "Iterate through listeners");
   int i = 1;
-  std::vector<std::string> theRefs = listenersToNotify.keys();
-  for (const std::string& ref : theRefs) {
+  
+  for (const SharedString & ref : listenersToNotify.keys()) {
     const InputStates & states = listenersToNotify[ref];
     AssetVersionD assetVersion(ref);
     notify(NFY_PROGRESS, "Iteration: %d | Total Iterations: %s | listener: %s",
            i,
            ToString(listenersToNotify.size()).c_str(),
-           ref.c_str());
+           ref.toString().c_str());
     if (assetVersion) {
       notify(NFY_VERBOSE, "Calling listener->HandleInputStateChange(). Num Succeeded: %zu, All Working or Succeeded: %s",
             states.numSucceeded,
@@ -131,7 +121,7 @@ AssetVersionImplD::StateChangeNotifier::NotifyListeners(
       assetVersion->HandleInputStateChange(states, notifier);
     } else {
       notify(NFY_WARN, "'%s' has broken listener '%s'",
-             assetVersion->GetRef().c_str(), ref.c_str());
+             assetVersion->GetRef().toString().c_str(), ref.toString().c_str());
     }
     i++;
   }
@@ -167,20 +157,18 @@ AssetVersionImplD::Load(const std::string &boundref)
 
 // since AssetVersionImpl is a virtual base class
 // my derived classes will initialize it directly
-AssetVersionImplD::AssetVersionImplD(const std::vector<std::string> &inputs)
+AssetVersionImplD::AssetVersionImplD(const std::vector<SharedString> &inputs)
     : AssetVersionImpl(), verholder(0)
 {
   AddInputAssetRefs(inputs);
 }
 
-
 void
-AssetVersionImplD::AddInputAssetRefs(const std::vector<std::string> &inputs_)
+AssetVersionImplD::AddInputAssetRefs(const std::vector<SharedString> &inputs_)
 {
-  for (std::vector<std::string>::const_iterator i = inputs_.begin();
-       i != inputs_.end(); ++i) {
+  for (const auto &i : inputs_) {
     // Add myself to the input's list of listeners.
-    MutableAssetVersionD input(*i);
+    MutableAssetVersionD input(i);
 
     // NOTE: we don't need to put listeners to asset versions of any type
     // which state is 'Succeeded'. A state is 'Succeeded', so the state
@@ -254,7 +242,7 @@ AssetVersionImplD::StateByInputs(bool *blockersAreOffline,
       }
     } else {
       notify(NFY_WARN, "StateByInputs: %s missing input %s",
-             GetRef().c_str(), input->GetRef().c_str());
+             GetRef().toString().c_str(), input->GetRef().toString().c_str());
       ++numblocking;
       // At this point we already know what the values of all of the outputs
       // will be (statebyinputs will be Blocked, blockersAreOffline will
@@ -297,7 +285,7 @@ void AssetVersionImplD::SetState(
     notify(NFY_DEBUG, "SetState: current state: %s | newstate: %s | asset: %s",
     	   ToString(state).c_str(),
            ToString(newstate).c_str(),
-           GetRef().c_str());
+           GetRef().toString().c_str());
     AssetDefs::State oldstate = state;
     state = newstate;
     try {
@@ -316,7 +304,7 @@ void AssetVersionImplD::SetState(
     // don't want to notify/propagate an old state.
     if (propagate && (state == newstate)) {
       notify(NFY_VERBOSE, "Calling theAssetManager.NotifyVersionStateChange(%s, %s)", 
-             GetRef().c_str(), 
+             GetRef().toString().c_str(), 
              ToString(newstate).c_str());
       theAssetManager.NotifyVersionStateChange(GetRef(), newstate);
       PropagateStateChange(notifier);
@@ -362,7 +350,7 @@ AssetVersionImplD::PropagateStateChange(const std::shared_ptr<StateChangeNotifie
 {
   notify(NFY_PROGRESS, "PropagateStateChange(%s): %s",
          ToString(state).c_str(), 
-         GetRef().c_str());
+         GetRef().toString().c_str());
   std::shared_ptr<StateChangeNotifier> notifier = StateChangeNotifier::GetNotifier(callerNotifier);
   notifier->AddParentsToNotify(parents);
   notifier->AddListenersToNotify(listeners, state);
@@ -372,18 +360,20 @@ void
 AssetVersionImplD::PropagateProgress(void)
 {
   notify(NFY_VERBOSE, "PropagateProgress(%s): %s",
-         ToString(progress).c_str(), GetRef().c_str());
-  auto theClosure = [&](const std::string& v)
+           ToString(progress).c_str(), GetRef().toString().c_str());
+  auto propagateProgress = [&](const std::string& p)
   {
-    AssetVersionD parent(v);
+    AssetVersionD parent(p);
+    // TODO Determine if calls to HandleChildProgress are too long running to 
+    // lock in this fashion.  
     if (parent) {
       parent->HandleChildProgress(GetRef());
     } else {
       notify(NFY_WARN, "'%s' has broken parent '%s'",
-             GetRef().c_str(), v.c_str());
+             GetRef().toString().c_str(), p.c_str());
     }
   };
-  parents.doForEach(theClosure);
+  parents.doForEach(propagateProgress);
 }
 
 void
@@ -408,11 +398,11 @@ void
 AssetVersionImplD::HandleChildStateChange(const std::shared_ptr<StateChangeNotifier>) const
 {
   // NoOp in base since leaves don't need to do anything
-  notify(NFY_VERBOSE, "AssetVersionImplD::HandleChildStateChange: %s", GetRef().c_str());
+  notify(NFY_VERBOSE, "AssetVersionImplD::HandleChildStateChange: %s", GetRef().toString().c_str());
 }
 
 void
-AssetVersionImplD::HandleChildProgress(const std::string &) const
+AssetVersionImplD::HandleChildProgress(const SharedString &) const
 {
   // NoOp in base since leaves don't do anything
 }
@@ -473,49 +463,49 @@ AssetVersionImplD::OkToClean(std::vector<std::string> *wouldbreak) const
 {
   // --- check that it's ok to clean me ---
   // If I have a successful parent, then my cleaning would break him
-  auto parentsClosure = [&](const std::string& v)
+  auto anyParentsCompleted = [&](const SharedString& p)
   {
-    AssetVersionD parent(v);
+    AssetVersionD parent(p);
     if (parent) {
       if ((parent->state != AssetDefs::Offline) &&
           (parent->state != AssetDefs::Bad)) {
         if (wouldbreak) {
-          wouldbreak->push_back(v);
+          wouldbreak->push_back(p);
         } else {
           return false;
         }
       }
     } else {
       notify(NFY_WARN, "'%s' has broken parent '%s'",
-             GetRef().c_str(), v.c_str());
+             GetRef().toString().c_str(), p.toString().c_str());
     }
     return true;
   };
-  if(!parents.doForEachUntil(parentsClosure))
+  if(!parents.doForEachUntil(anyParentsCompleted))
     return false;
 
-  // If I have succesfull listeners that depend on me, then my cleaning woul
+  // If I have succesfull listeners that depend on me, then my cleaning would
   // break them
-  auto listenersClosure = [&](const std::string& v)
+  auto anyListenersCompleted = [&](const SharedString& l)
   {
-    AssetVersionD listener(v);
+    AssetVersionD listener(l);
     if (listener) {
       if (((listener->state != AssetDefs::Offline) &&
            (listener->state != AssetDefs::Bad)) &&
           listener->OfflineInputsBreakMe()) {
         if (wouldbreak) {
-          wouldbreak->push_back(v);
+          wouldbreak->push_back(l);
         } else {
           return false;
         }
       }
     } else {
       notify(NFY_WARN, "'%s' has broken listener '%s'",
-             GetRef().c_str(), v.c_str());
+             GetRef().toString().c_str(), l.toString().c_str());
     }
     return true;
   };
-  if (!listeners.doForEachUntil(listenersClosure))
+  if (!listeners.doForEachUntil(anyListenersCompleted))
     return false;
 
   return wouldbreak ? wouldbreak->empty() : true;
@@ -576,7 +566,7 @@ AssetVersionImplD::Clean(void)
   if (!OkToClean(&wouldbreak)) {
     throw khException
       (kh::tr("Unable to clean '%1'.\nIt would break the following:\n")
-       .arg(GetRef()) +
+       .arg(GetRef().toString()) +
        join<std::vector<std::string>::iterator>(wouldbreak.begin(), wouldbreak.end(), "\n"));
   }
 
@@ -585,12 +575,11 @@ AssetVersionImplD::Clean(void)
 
 
 AssetVersionImplD::InputVersionHolder::InputVersionHolder
-(const std::vector<std::string> &inputrefs)
+(const std::vector<SharedString> &inputrefs)
 {
   inputvers.reserve(inputrefs.size());
-  for (std::vector<std::string>::const_iterator i = inputrefs.begin();
-       i != inputrefs.end(); ++i) {
-    inputvers.push_back(*i);
+  for (const auto &i : inputrefs) {
+    inputvers.push_back(i);
   }
 }
 
@@ -654,10 +643,8 @@ AssetVersionImplD::GetInputFilenames(std::vector<std::string> &out) const
   // load my input versions (only if they aren't already loaded)
   InputVersionGuard guard(this);
 
-  for (std::vector<AssetVersion>::const_iterator iver =
-         guard->inputvers.begin();
-       iver != guard->inputvers.end(); ++iver) {
-    (*iver)->GetOutputFilenames(out);
+  for (const auto &ver : guard->inputvers) {
+    ver->GetOutputFilenames(out);
   }
 }
 
@@ -690,7 +677,7 @@ void
 LeafAssetVersionImplD::HandleInputStateChange(InputStates newStates,
                                               const std::shared_ptr<StateChangeNotifier> notifier) const
 {
-  notify(NFY_VERBOSE, "HandleInputStateChange: %s", GetRef().c_str());
+  notify(NFY_VERBOSE, "HandleInputStateChange: %s", GetRef().toString().c_str());
   // If I'm waiting on my inputs to complete there's no need to do a full sync.
   // I just reduce the number that I'm waiting for by the number that have
   // succeeded. However, if any of my assets have fallen out of a working state
@@ -817,10 +804,8 @@ LeafAssetVersionImplD::HandleTaskDone(const TaskDoneMsg &msg)
     // the output files in the msg have full paths, make them relative to
     // the AssetRoot again
     ClearOutfiles();                // should already be empty
-    for (std::vector<std::string>::const_iterator of
-           = msg.outfiles.begin();
-         of != msg.outfiles.end(); ++of) {
-      outfiles.push_back(*of);
+    for (const auto &of : msg.outfiles) {
+      outfiles.push_back(of);
     }
     SetState(AssetDefs::Succeeded);
   } else {
@@ -835,12 +820,12 @@ LeafAssetVersionImplD::SubmitTask(void)
     DoSubmitTask();
   } catch (const std::exception &e) {
     notify(NFY_WARN, "Exception during SubmitTask: %s : %s",
-           GetRef().c_str(), e.what());
+           GetRef().toString().c_str(), e.what());
     WriteFatalLogfile(GetRef(), "SubmitTask", e.what());
     SetState(AssetDefs::Failed);
   } catch (...) {
     notify(NFY_WARN, "Unknown exception during SubmitTask: %s",
-           GetRef().c_str());
+           GetRef().toString().c_str());
     WriteFatalLogfile(GetRef(), "SubmitTask", "Unknown error");
     SetState(AssetDefs::Failed);
   }
@@ -849,7 +834,7 @@ LeafAssetVersionImplD::SubmitTask(void)
 void
 LeafAssetVersionImplD::ClearOutfiles(void)
 {
-  auto theClosure = [](const std::string& v)
+  auto collectAndDeleteOutfiles = [](const std::string& v)
   {
     if (khIsURI(v)) {
       // don't do anything for URI outfiles
@@ -865,16 +850,15 @@ LeafAssetVersionImplD::ClearOutfiles(void)
       todelete.push_back(filename);
       khGetOverflowFilenames(filename, todelete);
 
-      for (std::vector<std::string>::const_iterator d = todelete.begin();
-           d != todelete.end(); ++d) {
-        if (khExists(*d)) {
+      for (const auto &d : todelete) {
+        if (khExists(d)) {
           // add to list of files to delete
-          theAssetManager.DeleteFile(*d);
+          theAssetManager.DeleteFile(d);
         }
       }
     }
   };
-  outfiles.doForEach(theClosure);
+  outfiles.doForEach(collectAndDeleteOutfiles);
 
   outfiles.clear();
 }
@@ -1021,19 +1005,19 @@ LeafAssetVersionImplD::DoClean(const std::shared_ptr<StateChangeNotifier> caller
   SetState(AssetDefs::Offline, notifier);
 
   // now try to clean my inputs too
-  auto theClosure = [&](const std::string& v)
+  auto cleanInputs = [&](const SharedString& i)
   {
-    AssetVersionD input(v);
+    AssetVersionD input(i);
     if (input) {
       if (input->OkToCleanAsInput()) {
-        MutableAssetVersionD(v)->DoClean(notifier);
+        MutableAssetVersionD(i)->DoClean(notifier);
       }
     } else {
       notify(NFY_WARN, "'%s' has broken input '%s'",
-             GetRef().c_str(), v.c_str());
+              GetRef().toString().c_str(), i.toString().c_str());
     }
   };
-  inputs.doForEach(theClosure);
+  inputs.doForEach(cleanInputs);
 }
 
 
@@ -1043,7 +1027,7 @@ LeafAssetVersionImplD::DoClean(const std::shared_ptr<StateChangeNotifier> caller
 void
 CompositeAssetVersionImplD::HandleChildStateChange(const std::shared_ptr<StateChangeNotifier> notifier) const
 {
-  notify(NFY_VERBOSE, "CompositeAssetVersionImplD::HandleChildStateChange: %s", GetRef().c_str());
+  notify(NFY_VERBOSE, "CompositeAssetVersionImplD::HandleChildStateChange: %s", GetRef().toString().c_str());
   SyncState(notifier);
 }
 
@@ -1052,13 +1036,13 @@ CompositeAssetVersionImplD::HandleInputStateChange(InputStates, const std::share
 {
   if (children.empty()) {
     // Undecided composites need to listen to inputs
-    notify(NFY_VERBOSE, "HandleInputStateChange: %s", GetRef().c_str());
+    notify(NFY_VERBOSE, "HandleInputStateChange: %s", GetRef().toString().c_str());
     SyncState(notifier);
   }
 }
 
 void
-CompositeAssetVersionImplD::HandleChildProgress(const std::string &) const
+CompositeAssetVersionImplD::HandleChildProgress(const SharedString &) const
 {
   // TODO: - implement me some day
 }
@@ -1116,9 +1100,9 @@ CompositeAssetVersionImplD::ComputeState(void) const
   uint numblocking = 0;
   uint numinprog = 0;
   uint numfailed = 0;
-  auto theClosure = [&numgood, &numblocking, &numinprog, &numfailed](const std::string& v)
+  auto countChildrenStates = [&numgood, &numblocking, &numinprog, &numfailed](const SharedString& c)
   {
-    AssetVersion child(v);
+    AssetVersion child(c);
     if (child) {
       AssetDefs::State cstate = child->state;
       if (cstate == AssetDefs::Succeeded) {
@@ -1137,7 +1121,7 @@ CompositeAssetVersionImplD::ComputeState(void) const
       ++numblocking;
     }
   };
-  children.doForEach(theClosure);
+  children.doForEach(countChildrenStates);
 
 
   // determine my state based on my children
@@ -1165,7 +1149,7 @@ CompositeAssetVersionImplD::OnStateChange(AssetDefs::State newstate,
 {
   notify(NFY_VERBOSE,
          "CompositeAssetVersionImplD::OnStateChange() %s: %s -> %s",
-         GetRef().c_str(),
+         GetRef().toString().c_str(),
          ToString(oldstate).c_str(),
          ToString(newstate).c_str());
   AssetVersionImplD::OnStateChange(newstate, oldstate);
@@ -1222,14 +1206,13 @@ void
 CompositeAssetVersionImplD::AddChildren
 (std::vector<MutableAssetVersionD> &kids)
 {
-  for (std::vector<MutableAssetVersionD>::iterator child = kids.begin();
-       child != kids.end(); ++child) {
+  for (auto &child : kids) {
 
     // add ourself as the parent
-    (*child)->parents.push_back(GetRef());
+    child->parents.push_back(GetRef());
 
     // add the child to our list
-    children.push_back((*child)->GetRef());
+    children.push_back(child->GetRef());
   }
 }
 
@@ -1258,17 +1241,16 @@ CompositeAssetVersionImplD::Rebuild(const std::shared_ptr<StateChangeNotifier> c
   std::vector<AssetVersion> tocancel;
   ChildrenToCancel(tocancel);
   if (tocancel.size()) {
-    for (std::vector<AssetVersion>::const_iterator i = tocancel.begin();
-         i != tocancel.end(); ++i) {
+    for (const auto &i : tocancel) {
       // only rebuild the child if it is necessary
-      if (*i) {
-        if ((*i)->state & (AssetDefs::Canceled | AssetDefs::Failed)) {
-          MutableAssetVersionD child((*i)->GetRef());
+      if (i) {
+        if (i->state & (AssetDefs::Canceled | AssetDefs::Failed)) {
+          MutableAssetVersionD child(i->GetRef());
           child->Rebuild(notifier);
         }
       } else {
         notify(NFY_WARN, "'%s' has broken child to resume '%s'",
-               GetRef().c_str(), i->Ref().c_str());
+               GetRef().toString().c_str(), i.Ref().toString().c_str());
       }
     }
   }
@@ -1292,17 +1274,16 @@ CompositeAssetVersionImplD::Cancel(const std::shared_ptr<StateChangeNotifier> ca
   std::vector<AssetVersion> tocancel;
   ChildrenToCancel(tocancel);
   if (tocancel.size()) {
-    for (std::vector<AssetVersion>::const_iterator i = tocancel.begin();
-         i != tocancel.end(); ++i) {
+    for (const auto &i : tocancel) {
       // only cancel the child if it's not already finished
-      if (*i) {
-        if (!AssetDefs::Finished((*i)->state)) {
-          MutableAssetVersionD child((*i)->GetRef());
+      if (i) {
+        if (!AssetDefs::Finished(i->state)) {
+          MutableAssetVersionD child(i->GetRef());
           child->Cancel(notifier);
         }
       } else {
         notify(NFY_WARN, "'%s' has broken child to cancel '%s'",
-               GetRef().c_str(), i->Ref().c_str());
+               GetRef().toString().c_str(), i.Ref().toString().c_str());
       }
     }
   }
@@ -1322,31 +1303,30 @@ CompositeAssetVersionImplD::DoClean(const std::shared_ptr<StateChangeNotifier> c
   SetState(AssetDefs::Offline, notifier);
 
   // now try to clean my children
-  auto kidClosure = [&](const std::string& v)
+  auto kidClosure = [&](const std::string& c)
   {
-    AssetVersionD child(v);
+    AssetVersionD child(c);
     if (child) {
       if ((child->state != AssetDefs::Offline) && child->OkToClean()) {
-        MutableAssetVersionD(v)->DoClean(notifier);
+        MutableAssetVersionD(child)->DoClean(notifier);
       }
     } else {
       notify(NFY_WARN, "'%s' has broken child '%s'",
-             GetRef().c_str(), v.c_str());
-    }
+               GetRef().toString().c_str(), c.c_str());}
   };
   children.doForEach(kidClosure);
 
   // now try to clean my inputs too
-  auto inClosure = [&](const std::string& v)
+  auto inClosure = [&](const SharedString& i)
   {
-    AssetVersionD input(v);
+    AssetVersionD input(i);
     if (input) {
       if (input->OkToCleanAsInput()) {
-        MutableAssetVersionD(v)->DoClean(notifier);
+        MutableAssetVersionD(i)->DoClean(notifier);
       }
     } else {
       notify(NFY_WARN, "'%s' has broken input '%s'",
-             GetRef().c_str(), v.c_str());
+              GetRef().toString().c_str(), i.toString().c_str());
     }
   };
   inputs.doForEach(inClosure);

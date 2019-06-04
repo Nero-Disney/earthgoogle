@@ -127,10 +127,10 @@ class khRWLock
   private:
     pthread_rwlock_t rwlock;
   public:
-    khRWLock() : rwlock(PTHREAD_RWLOCK_INITIALIZER) { }
+    khRWLock() { pthread_rwlock_init(&rwlock,NULL); }
     virtual ~khRWLock() {}
     void lockRead(void) { pthread_rwlock_rdlock(&rwlock); }
-    void lockWrite(void) {  pthread_rwlock_wrlock(&rwlock); }
+    void lockWrite(void) { pthread_rwlock_wrlock(&rwlock); }
     void unlock(void) { pthread_rwlock_unlock(&rwlock); }
 };
 
@@ -258,87 +258,130 @@ class khMTMap
 // WARNING: Use this with extreme caution
 // It protects some obvious problems but creates some less obvious ones
 template <typename T>
-class MTVector {
+class MTVector : public std::vector<T>{
   public:
     typedef std::vector<T> Base;
+    using Base::begin;
+    using Base::end;
     typedef typename Base::const_iterator const_iterator;
 
   private:
     mutable khRWLock mtx;
-    Base vec;
 
-    MTVector(const MTVector& a, const khReadGuard&) : vec(a.vec) { }
+    MTVector(const MTVector& a, const khReadGuard&) : Base(a) { }
 
   public:
     void push_back(const T& v) {
       khWriteGuard lock(mtx);
-      vec.push_back(v);
+      Base::push_back( v );
     }
     MTVector() { }
     // forward to private copy constructor to protect vector from modification
     MTVector(const MTVector& a) : MTVector(a, khReadGuard(a.mtx)) { }
+    MTVector(const std::vector<T>& v) : Base(v) { }
+    
 
     const T& operator[] (const size_t idx) const {
       khReadGuard lock(mtx);
-      return vec[idx]; 
+      return Base::operator[] (idx); 
     }
 
     bool operator==(const MTVector& x) const {
       // Since using a read lock, no need to worry about lock ordering or things like a==a
       khReadGuard lock1(mtx);
       khReadGuard lock2(x.mtx);
-      return std::equal(vec.begin(), vec.end(), x.vec.begin());
+      return std::equal(Base::begin(), Base::end(), x.begin());
     }
 
     bool operator==(const Base& x) const {
       khReadGuard lock(mtx);
-      std::equal(vec.begin(), vec.end(), x.begin());
-      return true;
+      return Base::operator==(x);
+    }
+   
+    bool operator<(const MTVector& x) const {
+      // Since using a read lock, no need to worry about lock ordering or things like a==a
+      khReadGuard lock1(mtx);
+      khReadGuard lock2(x.mtx);
+      return std::less<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator<(const Base& x) const {
+      khReadGuard lock(mtx);
+      return std::less<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator<=(const MTVector& x) const {
+      // Since using a read lock, no need to worry about lock ordering or things like a==a
+      khReadGuard lock1(mtx);
+      khReadGuard lock2(x.mtx);
+      return std::less_equal<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator<=(const Base& x) const {
+      khReadGuard lock(mtx);
+      return std::less_equal<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator>(const MTVector& x) const {
+      khReadGuard lock1(mtx);
+      khReadGuard lock2(x.mtx);
+      return std::greater<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator>(const Base& x) const {
+      khReadGuard lock(mtx);
+      return std::greater<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator>=(const MTVector& x) const {
+      khReadGuard lock1(mtx);
+      khReadGuard lock2(x.mtx);
+      return std::greater_equal<T>(Base::begin(), Base::end(), x.begin());
+    }
+
+    bool operator>=(const Base& x) const {
+      khReadGuard lock(mtx);
+      return std::greater_equal<T>(Base::begin(), Base::end(), x.begin());
     }
 
     void clear(void) {
       khWriteGuard lock(mtx);
-      vec.clear();
+      Base::clear();
     }
 
     size_t size(void) const {
-      return vec.size();
+      khReadGuard lock(mtx);
+      return Base::size();
     }
 
     bool empty(void) const {
-      return vec.empty();
+      khReadGuard lock(mtx);
+      return Base::empty();
     }
 
     void shrink_to_fit(void) {
       khWriteGuard lock(mtx);
-      vec.shrink_to_fit();
+      Base::shrink_to_fit();
     }
+    
     
     void doForEach(std::function<void (const T&)> func) const {
       if (!func) return; // can't do anyting with an invalid function
       khReadGuard lock(mtx);
-      for_each(vec.begin(), vec.end(), func);
+      for_each(begin(), end(), func);
     }
 
     bool doForEachUntil(std::function<bool (const T&)> func) const {
       if (!func) return false; // can't do anyting with an invalid function
       khReadGuard lock(mtx);
       bool loopedThroughAll = true;
-      for (const auto& v : vec) {
+      for (const auto& v : *this) {
         if (!func(v)) {
           loopedThroughAll = false;
           break;
         }
       }
       return loopedThroughAll;
-    }
-
-// The remaining methods are bad news but are currently needed to compile
-    operator const Base&(void) const {
-      return vec;
-    }
-    operator const Base*(void) const {
-      return &vec;
     }
 };
 

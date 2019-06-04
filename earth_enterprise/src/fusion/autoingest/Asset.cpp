@@ -40,8 +40,8 @@ std::string AssetImpl::XMLFilename(const std::string &ref) {
 
 
 void AssetImpl::GetInputFilenames(std::vector<std::string> &out) const {
-  for (std::vector<std::string>::const_iterator i = inputs.begin();
-       i != inputs.end(); ++i) {
-    AssetVersion(*i)->GetOutputFilenames(out);
-  }
+  
+  inputs.doForEach([&](const std::string& i) {
+    AssetVersion(i)->GetOutputFilenames(out);
+  });
 }

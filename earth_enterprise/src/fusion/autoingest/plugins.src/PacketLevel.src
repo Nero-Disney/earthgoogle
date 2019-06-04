@@ -108,7 +108,7 @@ void PacketLevelAssetVersionImplD::DoSubmitTask(void) {
 
 namespace {
 void GetInputChildren(const AssetVersion &ver,
-                      std::vector<std::string> &inputkids) {
+                    std::vector<SharedString> &inputkids) {
   std::queue<std::shared_ptr<AssetVersion>> goodVersions;
   ver->inputs.doForEach([&](const std::string& v) {
     std::shared_ptr<AssetVersion> p = std::make_shared<AssetVersion>(v);
@@ -164,7 +164,7 @@ bool PacketLevelAssetVersionImplD::AttemptConvertFromOldLastGood(void) {
   }
 
   // make a list of my input KRPs & KRMPs
-  std::vector<std::string> inputkids;
+  std::vector<SharedString> inputkids;
   GetInputChildren(AssetVersion(GetRef()), inputkids);
 
   // make a modified copy of my config that we can compare against the old
@@ -221,16 +221,16 @@ bool PacketLevelAssetVersionImplD::AttemptConvertFromOldLastGood(void) {
 
     if (!IsUpToDate(version->config, checkconfig)) {
       notify(NFY_DEBUG, "Configs don't match: %s",
-             version->GetRef().c_str());
+             version->GetRef().toString().c_str());
       continue;
     }
 
 
-    std::vector<std::string> oldinputkids;
+    std::vector<SharedString> oldinputkids;
     GetInputChildren(version, oldinputkids);
     if (inputkids != oldinputkids) {
       notify(NFY_DEBUG, "Input kids don't match: %s",
-             version->GetRef().c_str());
+             version->GetRef().toString().c_str());
       continue;
     }
 
